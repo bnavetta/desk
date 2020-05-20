@@ -3,15 +3,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result as AnyResult;
-use log::{info, debug, error};
+use dbus::blocking::Connection;
+use log::{debug, error, info};
 
-use desk_logind::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock, Logind, LogindError};
+use desk_logind::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock, Logind};
 
 static INHIBITOR_WHO: &str = "desk-locker";
 static INHIBITOR_WHY: &str = "Lock screen on sleep";
 
 struct Locker {
-    logind: Logind,
     pass_inhibitor: bool,
 
     inhibitor_lock: Option<InhibitorLock>,
@@ -48,25 +48,29 @@ struct Locker {
 // while the locker is starting in response to a `Lock` signal.
 
 impl Locker {
+    fn new(logind: &Logind, pass_inhibitor: bool) -> AnyResult<Locker> {
+        let inhibitor_lock = Locker::take_lock(logind)?;
+        Ok(Locker {
+            pass_inhibitor,
+            inhibitor_lock: Some(inhibitor_lock),
+            locker_process: None
+        })
+    }
+
     /// Helper to take out a new inhibitor lock. Called at startup and on when resuming from sleep.
-    fn take_lock(&self) -> AnyResult<InhibitorLock> {
-        let events = InhibitEventSet::new().add(InhibitEvent::Sleep);
-        let lock = self.logind.inhibit(INHIBITOR_WHO, INHIBITOR_WHY, events, InhibitMode::Delay)?;
+    fn take_lock(logind: &Logind<'_>) -> AnyResult<InhibitorLock> {
+        let mut events = InhibitEventSet::new();
+        events.add(InhibitEvent::Sleep);
+        let lock = logind.inhibit(INHIBITOR_WHO, INHIBITOR_WHY, &events, InhibitMode::Delay)?;
         debug!("Took inhibitor lock {}", lock);
         Ok(lock)
     }
 
-    /// Ensures an inhibitor lock is held, taking one if necessary. Returns a reference to the lock.
-    fn ensure_lock(&mut self) -> AnyResult<&InhibitorLock> {
-        // Can't use get_or_insert_with because of possible failure taking the lock
-        if let None = self.inhibitor_lock {
-            let lock = self.take_lock()?;
-            self.inhibitor_lock = Some(lock);
-        }
-
+    /// Get a reference to the inhibitor lock. Panics if the lock is not held.
+    fn inhibitor_lock(&self) -> &InhibitorLock {
         match self.inhibitor_lock {
-            Some(ref lock) => Ok(lock),
-            None => unreachable!()
+            Some(ref lock) => lock,
+            None => panic!("No inhibitor lock held")
         }
     }
 
@@ -84,8 +88,8 @@ impl Locker {
         debug!("Spawning screen locker");
         let mut cmd = Command::new("xsecurelock");
         if self.pass_inhibitor {
-            let inhibitor = self.ensure_lock()?.dup_fd()?;
-            cmd.env("XSS_SLEEP_LOCK_FD", inhibitor);
+            let inhibitor = self.inhibitor_lock().dup_fd()?;
+            cmd.env("XSS_SLEEP_LOCK_FD", inhibitor.to_string());
         }
         Ok(cmd.spawn()?)
     }
@@ -109,7 +113,7 @@ impl Locker {
     /// Kill the locker process, if running.
     fn kill_locker(&mut self) -> AnyResult<()> {
         if let Some(mut locker) = self.locker_process.take() {
-            debug!("Killing screen locker {}", locker);
+            debug!("Killing screen locker {:?}", locker);
             locker.kill()?;
         }
         Ok(())
@@ -121,8 +125,8 @@ impl Locker {
         Ok(())
     }
 
-    fn on_resume(&mut self) -> AnyResult<()> {
-        self.ensure_lock()?;
+    fn on_resume(&mut self, logind: &Logind) -> AnyResult<()> {
+        self.inhibitor_lock = Some(Locker::take_lock(logind)?);
         Ok(())
     }
 
@@ -135,86 +139,63 @@ impl Locker {
         self.kill_locker()?;
         Ok(())
     }
+}
 
-    fn poll(self: Arc<Mutex<Locker>>) -> AnyResult<()> {
-        let s = self.lock()?;
+fn run() -> AnyResult<()> {
+    let mut conn = Connection::new_system()?;
+
+    let logind = Logind::new(&conn);
+    let locker = Arc::new(Mutex::new(Locker::new(&logind, true)?));
+
+    // Set up session lock/unlock callbacks
+    let session = logind.current_session()?;
+    info!("Current session: {}", session.id());
+
+    {
+        let locker = locker.clone();
+        session.on_lock(move |_logind| {
+            if let Err(e) = locker.lock().unwrap().on_lock() {
+                error!("Handling lock failed: {}", e);
+            }
+        })?;
+    }
+
+    {
+        let locker = locker.clone();
+        session.on_unlock(move |_logind| {
+            if let Err(e) = locker.lock().unwrap().on_unlock() {
+                error!("Handling unlock failed: {}", e);
+            }
+        })?;
+    }
+
+    // Then set up sleep/resume callbacks
+    let sleep_locker = locker.clone();
+    let resume_locker = locker.clone();
+    logind.on_sleep(
+        move |_logind| {
+            if let Err(e) = sleep_locker.lock().unwrap().on_sleep() {
+                error!("Handling sleep failed: {}", e);
+            }
+        },
+        move |logind| {
+            if let Err(e) = resume_locker.lock().unwrap().on_resume(&logind) {
+                error!("Handling resume failed: {}", e);
+            }
+        }
+    )?;
+
+    info!("Waiting for lock events...");
+    loop {
+        if let Err(e) = conn.process(Duration::from_secs(5)) {
+            error!("Processing D-Bus events failed: {}", e);
+        }
     }
 }
 
 pub fn main() {
-    let logind = Logind::new().unwrap();
-
-    let session = logind.current_session().unwrap();
-    println!("Session: {}", session.name().unwrap());
-
-    // This deadlocks
-    // instead, move state into one struct w/ a lock around it, callbacks can take lock as needed
-
-    session
-        .on_lock(|| {
-            println!("Locked!");
-        })
-        .unwrap();
-
-    session
-        .on_unlock(|| {
-            println!("Unlocked!");
-        })
-        .unwrap();
-
-    let mut inhibit_events = InhibitEventSet::new();
-    inhibit_events.add(InhibitEvent::Sleep);
-
-    let inhibitor = logind
-        .inhibit(
-            INHIBITOR_WHO,
-            INHIBITOR_WHY,
-            &inhibit_events,
-            InhibitMode::Delay,
-        )
-        .unwrap();
-    println!("Got inhibitor lock: {:?}", inhibitor);
-    let inhibitor = Arc::new(Mutex::new(Some(inhibitor)));
-    let inhibitor2 = inhibitor.clone();
-
-    let logind = Arc::new(Mutex::new(logind));
-    let logind2 = logind.clone();
-
-    {
-        let logind = logind.lock().unwrap();
-        logind
-            .on_sleep(
-                move || {
-                    println!("About to sleep!");
-
-                    // Release the inhibitor lock before sleeping
-                    let mut inhibitor = inhibitor.lock().unwrap();
-                    if let Some(lock) = inhibitor.take() {
-                        drop(lock);
-                    }
-                },
-                move || {
-                    println!("Resumed from sleep!");
-
-                    let mut inhibitor = inhibitor2.lock().unwrap();
-                    let logind = logind2.lock().unwrap();
-                    let new_lock = logind
-                        .inhibit(
-                            INHIBITOR_WHO,
-                            INHIBITOR_WHY,
-                            &inhibit_events,
-                            InhibitMode::Delay,
-                        )
-                        .unwrap();
-                    println!("Took new inhibitor lock: {:?}", new_lock);
-                    *inhibitor = Some(new_lock);
-                },
-            )
-            .unwrap();
-    }
-
-    loop {
-        let mut logind = logind.lock().unwrap();
-        logind.await_events(Duration::from_secs(2)).unwrap();
+    env_logger::init();
+    if let Err(e) = run() {
+        error!("{}", e);
     }
 }

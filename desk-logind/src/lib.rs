@@ -3,7 +3,6 @@
 use std::env;
 use std::fmt;
 use std::os::unix::io::{IntoRawFd, AsRawFd, RawFd};
-use std::sync::Arc;
 use std::time::Duration;
 
 use dbus::arg::OwnedFd;
@@ -40,13 +39,13 @@ pub fn session_id() -> Result<SessionId, LogindError> {
 
 /// A logind client connection. This is a relatively thin wrapper over the
 /// [D-Bus API](https://www.freedesktop.org/wiki/Software/systemd/logind/).
-pub struct Logind {
-    conn: Arc<Connection>,
+pub struct Logind<'a> {
+    conn: &'a Connection,
     timeout: Duration,
 }
 
-impl Logind {
-    pub fn new(conn: Arc<Connection>) -> Logind {
+impl <'a> Logind <'a> {
+    pub fn new(conn: &'a Connection) -> Logind {
         Logind {
             conn,
             timeout: Duration::from_millis(500),
@@ -54,7 +53,7 @@ impl Logind {
     }
 
     /// Get a handle to a logind session by ID.
-    pub fn session(&self, id: SessionId) -> Result<Session, LogindError> {
+    pub fn session(&self, id: SessionId) -> Result<Session<'a>, LogindError> {
         let manager = self.manager();
         let path = manager.get_session(id.as_str())?;
         let proxy = Proxy::new("org.freedesktop.login1", path, self.timeout, self.conn.clone());
@@ -62,7 +61,7 @@ impl Logind {
     }
 
     /// Get a handle to the current logind session.
-    pub fn current_session(&self) -> Result<Session, LogindError> {
+    pub fn current_session(&self) -> Result<Session<'a>, LogindError> {
         let id = session_id()?;
         self.session(id)
     }
@@ -79,7 +78,7 @@ impl Logind {
         Ok(InhibitorLock { fd })
     }
 
-    pub fn on_sleep<F: Fn() -> () + Send + 'static, G: Fn() -> () + Send + 'static>(
+    pub fn on_sleep<F: Fn(Logind) -> () + Send + 'static, G: Fn(Logind) -> () + Send + 'static>(
         &self,
         pre_sleep: F,
         post_sleep: G,
@@ -87,12 +86,12 @@ impl Logind {
         let manager = self.manager();
         match manager.match_signal(
             move |signal: OrgFreedesktopLogin1ManagerPrepareForSleep,
-                  _: &Connection,
+                  conn: &Connection,
                   _: &Message| {
                 if signal.arg0 {
-                    pre_sleep();
+                    pre_sleep(Logind::new(conn));
                 } else {
-                    post_sleep();
+                    post_sleep(Logind::new(conn));
                 }
                 true
             },
@@ -102,18 +101,12 @@ impl Logind {
         }
     }
 
-    /// Wait for any events subscribed to on the login manager or any sessions
-    pub fn await_events(&mut self, timeout: Duration) -> Result<(), LogindError> {
-        self.conn.process(timeout)?;
-        Ok(())
-    }
-
-    fn manager(&self) -> Proxy<'_, Arc<Connection>> {
+    fn manager(&self) -> Proxy<'_, &'a Connection> {
         Proxy::new(
             "org.freedesktop.login1",
             "/org/freedesktop/login1",
             self.timeout,
-            self.conn.clone(),
+            self.conn,
         )
     }
 }
@@ -233,22 +226,22 @@ impl fmt::Display for InhibitorLock {
 }
 
 /// Handle to a logind session
-pub struct Session {
+pub struct Session<'a> {
     id: SessionId,
-    proxy: Proxy<'static, Arc<Connection>>,
+    proxy: Proxy<'a, &'a Connection>,
 }
 
-impl Session {
+impl <'a> Session<'a> {
     pub fn name(&self) -> Result<String, LogindError> {
         let name = self.proxy.name()?;
         Ok(name)
     }
 
     /// Register a callback to run when the session is locked.
-    pub fn on_lock<F: Fn() -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
+    pub fn on_lock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
         match self.proxy.match_signal(
-            move |_: OrgFreedesktopLogin1SessionLock, _: &Connection, _: &Message| {
-                cb();
+            move |_: OrgFreedesktopLogin1SessionLock, conn: &Connection, _: &Message| {
+                cb(Logind::new(conn));
                 true
             },
         ) {
@@ -257,10 +250,10 @@ impl Session {
         }
     }
 
-    pub fn on_unlock<F: Fn() -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
+    pub fn on_unlock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
         match self.proxy.match_signal(
-            move |_: OrgFreedesktopLogin1SessionUnlock, _: &Connection, _: &Message| {
-                cb();
+            move |_: OrgFreedesktopLogin1SessionUnlock, conn: &Connection, _: &Message| {
+                cb(Logind::new(conn));
                 true
             },
         ) {
