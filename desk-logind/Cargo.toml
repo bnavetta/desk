@@ -1,0 +1,9 @@
+[package]
+name = "desk-logind"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+dbus = "0.8"
+nix = "0.17"
+thiserror = "1.0"

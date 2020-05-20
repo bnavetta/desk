@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "desk-logind",
+  "desk-locker",
+]
+
