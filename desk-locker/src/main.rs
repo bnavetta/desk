@@ -6,14 +6,20 @@ use anyhow::Result as AnyResult;
 use dbus::blocking::Connection;
 use log::{debug, error, info};
 
-use desk_logind::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock, Logind};
+use desk_logind::{SessionId, Logind, session_id};
+use desk_logind::inhibitor::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock};
 
 static INHIBITOR_WHO: &str = "desk-locker";
 static INHIBITOR_WHY: &str = "Lock screen on sleep";
 
 struct Locker {
+    // Configuration
     pass_inhibitor: bool,
+    set_idle: bool,
 
+    session_id: SessionId,
+
+    // State
     inhibitor_lock: Option<InhibitorLock>,
     locker_process: Option<Child>
 }
@@ -48,10 +54,13 @@ struct Locker {
 // while the locker is starting in response to a `Lock` signal.
 
 impl Locker {
-    fn new(logind: &Logind, pass_inhibitor: bool) -> AnyResult<Locker> {
+    fn new(logind: &Logind, pass_inhibitor: bool, set_idle: bool) -> AnyResult<Locker> {
+        let session_id = session_id()?;
         let inhibitor_lock = Locker::take_lock(logind)?;
         Ok(Locker {
             pass_inhibitor,
+            set_idle,
+            session_id,
             inhibitor_lock: Some(inhibitor_lock),
             locker_process: None
         })
@@ -59,8 +68,7 @@ impl Locker {
 
     /// Helper to take out a new inhibitor lock. Called at startup and on when resuming from sleep.
     fn take_lock(logind: &Logind<'_>) -> AnyResult<InhibitorLock> {
-        let mut events = InhibitEventSet::new();
-        events.add(InhibitEvent::Sleep);
+        let events = InhibitEventSet::with_event(InhibitEvent::Sleep);
         let lock = logind.inhibit(INHIBITOR_WHO, INHIBITOR_WHY, &events, InhibitMode::Delay)?;
         debug!("Took inhibitor lock {}", lock);
         Ok(lock)
@@ -130,13 +138,21 @@ impl Locker {
         Ok(())
     }
 
-    fn on_lock(&mut self) -> AnyResult<()> {
+    fn on_lock(&mut self, logind: &Logind) -> AnyResult<()> {
         self.start_locker()?;
+        if self.set_idle {
+            let session = logind.session(&self.session_id)?;
+            session.set_idle_hint(true)?;
+        }
         Ok(())
     }
 
-    fn on_unlock(&mut self) -> AnyResult<()> {
+    fn on_unlock(&mut self, logind: &Logind) -> AnyResult<()> {
         self.kill_locker()?;
+        if self.set_idle {
+            let session = logind.session(&self.session_id)?;
+            session.set_idle_hint(false)?;
+        }
         Ok(())
     }
 }
@@ -145,16 +161,15 @@ fn run() -> AnyResult<()> {
     let mut conn = Connection::new_system()?;
 
     let logind = Logind::new(&conn);
-    let locker = Arc::new(Mutex::new(Locker::new(&logind, true)?));
+    let locker = Arc::new(Mutex::new(Locker::new(&logind, true, true)?));
 
     // Set up session lock/unlock callbacks
     let session = logind.current_session()?;
-    info!("Current session: {}", session.id());
 
     {
         let locker = locker.clone();
-        session.on_lock(move |_logind| {
-            if let Err(e) = locker.lock().unwrap().on_lock() {
+        session.on_lock(move |logind| {
+            if let Err(e) = locker.lock().unwrap().on_lock(&logind) {
                 error!("Handling lock failed: {}", e);
             }
         })?;
@@ -162,8 +177,8 @@ fn run() -> AnyResult<()> {
 
     {
         let locker = locker.clone();
-        session.on_unlock(move |_logind| {
-            if let Err(e) = locker.lock().unwrap().on_unlock() {
+        session.on_unlock(move |logind| {
+            if let Err(e) = locker.lock().unwrap().on_unlock(&logind) {
                 error!("Handling unlock failed: {}", e);
             }
         })?;

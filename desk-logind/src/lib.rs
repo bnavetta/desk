@@ -1,38 +1,26 @@
 //! `systemd-logind` client library
 #![feature(backtrace)]
 use std::env;
-use std::fmt;
-use std::os::unix::io::{IntoRawFd, AsRawFd, RawFd};
 use std::time::Duration;
 
-use dbus::arg::OwnedFd;
 use dbus::blocking::{Connection, Proxy};
 use dbus::Message;
-use nix::unistd;
 
 use crate::api::manager::{
     OrgFreedesktopLogin1Manager, OrgFreedesktopLogin1ManagerPrepareForSleep,
 };
-use crate::api::session::{
-    OrgFreedesktopLogin1Session, OrgFreedesktopLogin1SessionLock, OrgFreedesktopLogin1SessionUnlock,
-};
+use crate::inhibitor::{InhibitorLock, InhibitMode, InhibitEventSet};
 pub use crate::error::LogindError;
+pub use crate::session::{SessionId, Session};
 
 mod api;
 mod error;
-
-#[derive(Debug, Eq, PartialEq, Hash)]
-pub struct SessionId(String);
-
-impl SessionId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+mod session;
+pub mod inhibitor;
 
 pub fn session_id() -> Result<SessionId, LogindError> {
     match env::var("XDG_SESSION_ID") {
-        Ok(id) => Ok(SessionId(id)),
+        Ok(id) => Ok(SessionId::new(id)),
         Err(_) => Err(LogindError::no_session_id()),
     }
 }
@@ -53,17 +41,17 @@ impl <'a> Logind <'a> {
     }
 
     /// Get a handle to a logind session by ID.
-    pub fn session(&self, id: SessionId) -> Result<Session<'a>, LogindError> {
+    pub fn session(&self, id: &SessionId) -> Result<Session<'a>, LogindError> {
         let manager = self.manager();
         let path = manager.get_session(id.as_str())?;
         let proxy = Proxy::new("org.freedesktop.login1", path, self.timeout, self.conn.clone());
-        Ok(Session { id, proxy })
+        Ok(Session::new(proxy))
     }
 
     /// Get a handle to the current logind session.
     pub fn current_session(&self) -> Result<Session<'a>, LogindError> {
         let id = session_id()?;
-        self.session(id)
+        self.session(&id)
     }
 
     pub fn inhibit(
@@ -75,7 +63,7 @@ impl <'a> Logind <'a> {
     ) -> Result<InhibitorLock, LogindError> {
         let manager = self.manager();
         let fd = manager.inhibit(events.as_str(), who, why, mode.as_str())?;
-        Ok(InhibitorLock { fd })
+        Ok(InhibitorLock::new(fd))
     }
 
     pub fn on_sleep<F: Fn(Logind) -> () + Send + 'static, G: Fn(Logind) -> () + Send + 'static>(
@@ -111,160 +99,3 @@ impl <'a> Logind <'a> {
     }
 }
 
-/// A logind event which can be inhibited (by taking an inhibitor lock)
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
-pub enum InhibitEvent {
-    Shutdown,
-    Sleep,
-    Idle,
-    HandlePowerKey,
-    HandleSuspendKey,
-    HandleHibernateKey,
-    HandleLidSwitch,
-}
-
-impl InhibitEvent {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            InhibitEvent::Shutdown => "shutdown",
-            InhibitEvent::Sleep => "sleep",
-            InhibitEvent::Idle => "idle",
-            InhibitEvent::HandlePowerKey => "handle-power-key",
-            InhibitEvent::HandleSuspendKey => "handle-suspend-key",
-            InhibitEvent::HandleHibernateKey => "handle-hibernate-key",
-            InhibitEvent::HandleLidSwitch => "handle-lid-switch",
-        }
-    }
-}
-
-impl fmt::Display for InhibitEvent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/// A set of events to inhibit.
-#[derive(Default, Eq, PartialEq)]
-pub struct InhibitEventSet(String);
-
-impl InhibitEventSet {
-    pub fn new() -> InhibitEventSet {
-        InhibitEventSet(String::new())
-    }
-
-    /// Add an event to the set. Note that this does not check if `event` is already included.
-    pub fn add(&mut self, event: InhibitEvent) -> &mut InhibitEventSet {
-        self.0.push_str(event.as_str());
-        self.0.push(':');
-        self
-    }
-
-    pub fn as_str(&self) -> &str {
-        if self.0.is_empty() {
-            ""
-        } else {
-            &self.0[0..self.0.len()]
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
-pub enum InhibitMode {
-    /// An inhibitor lock which prevents the event from occurring.
-    Block,
-    /// An inhibitor lock which delays the inhibited event for a short period of time.
-    Delay,
-}
-
-impl InhibitMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            InhibitMode::Block => "block",
-            InhibitMode::Delay => "delay",
-        }
-    }
-}
-
-impl fmt::Display for InhibitMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/// RAII handle on an inhibitor lock. If this is dropped, the lock is released.
-#[derive(Debug, Clone)]
-pub struct InhibitorLock {
-    fd: OwnedFd,
-}
-
-impl InhibitorLock {
-    /// Creates a duplicate of the file descriptor backing this inhibitor lock. The caller is responsible
-    /// for ensuring that the returned file descriptor is eventually closed.
-    pub fn dup_fd(&self) -> Result<RawFd, LogindError> {
-        unistd::dup(self.fd.as_raw_fd()).map_err(|err| {
-            LogindError::inhibitor_file_error("Duplicating inhibitor lock file descriptor failed".to_string(), err)
-        })
-    }
-
-    pub fn release(self) -> Result<(), LogindError> {
-        unistd::close(self.fd.into_fd()).map_err(|err| {
-            LogindError::inhibitor_file_error("Could not release inhibitor lock".to_string(), err)
-        })
-    }
-}
-
-impl IntoRawFd for InhibitorLock {
-    fn into_raw_fd(self) -> RawFd {
-        self.fd.into_fd()
-    }
-}
-
-impl fmt::Display for InhibitorLock {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.fd.as_raw_fd())
-    }
-}
-
-/// Handle to a logind session
-pub struct Session<'a> {
-    id: SessionId,
-    proxy: Proxy<'a, &'a Connection>,
-}
-
-impl <'a> Session<'a> {
-    pub fn name(&self) -> Result<String, LogindError> {
-        let name = self.proxy.name()?;
-        Ok(name)
-    }
-
-    /// Register a callback to run when the session is locked.
-    pub fn on_lock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
-        match self.proxy.match_signal(
-            move |_: OrgFreedesktopLogin1SessionLock, conn: &Connection, _: &Message| {
-                cb(Logind::new(conn));
-                true
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(LogindError::match_failed("Lock", e)),
-        }
-    }
-
-    pub fn on_unlock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
-        match self.proxy.match_signal(
-            move |_: OrgFreedesktopLogin1SessionUnlock, conn: &Connection, _: &Message| {
-                cb(Logind::new(conn));
-                true
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(LogindError::match_failed("Unlock", e)),
-        }
-    }
-}
-
-impl<'a> fmt::Debug for Session<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Session").field("id", &self.id).finish()
-    }
-}
