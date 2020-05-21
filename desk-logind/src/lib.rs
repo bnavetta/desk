@@ -9,14 +9,14 @@ use dbus::Message;
 use crate::api::manager::{
     OrgFreedesktopLogin1Manager, OrgFreedesktopLogin1ManagerPrepareForSleep,
 };
-use crate::inhibitor::{InhibitorLock, InhibitMode, InhibitEventSet};
 pub use crate::error::LogindError;
-pub use crate::session::{SessionId, Session};
+use crate::inhibitor::{InhibitEventSet, InhibitMode, InhibitorLock};
+pub use crate::session::{Session, SessionId};
 
 mod api;
 mod error;
-mod session;
 pub mod inhibitor;
+mod session;
 
 pub fn session_id() -> Result<SessionId, LogindError> {
     match env::var("XDG_SESSION_ID") {
@@ -32,7 +32,7 @@ pub struct Logind<'a> {
     timeout: Duration,
 }
 
-impl <'a> Logind <'a> {
+impl<'a> Logind<'a> {
     pub fn new(conn: &'a Connection) -> Logind {
         Logind {
             conn,
@@ -44,7 +44,12 @@ impl <'a> Logind <'a> {
     pub fn session(&self, id: &SessionId) -> Result<Session<'a>, LogindError> {
         let manager = self.manager();
         let path = manager.get_session(id.as_str())?;
-        let proxy = Proxy::new("org.freedesktop.login1", path, self.timeout, self.conn.clone());
+        let proxy = Proxy::new(
+            "org.freedesktop.login1",
+            path,
+            self.timeout,
+            self.conn.clone(),
+        );
         Ok(Session::new(proxy))
     }
 
@@ -77,6 +82,7 @@ impl <'a> Logind <'a> {
                   conn: &Connection,
                   _: &Message| {
                 if signal.arg0 {
+                    // TODO: would be nice to make `Logind` less tied to dbus' threading model where we have to keep making new instances
                     pre_sleep(Logind::new(conn));
                 } else {
                     post_sleep(Logind::new(conn));
@@ -98,4 +104,3 @@ impl <'a> Logind <'a> {
         )
     }
 }
-

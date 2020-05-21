@@ -1,7 +1,7 @@
 //! Model for systemd-logind inhibitor locks
 
 use std::fmt;
-use std::os::unix::io::{IntoRawFd, AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use dbus::arg::OwnedFd;
 use nix::unistd;
@@ -111,7 +111,10 @@ impl InhibitorLock {
     /// for ensuring that the returned file descriptor is eventually closed.
     pub fn dup_fd(&self) -> Result<RawFd, LogindError> {
         unistd::dup(self.fd.as_raw_fd()).map_err(|err| {
-            LogindError::inhibitor_file_error("Duplicating inhibitor lock file descriptor failed".to_string(), err)
+            LogindError::inhibitor_file_error(
+                "Duplicating inhibitor lock file descriptor failed".to_string(),
+                err,
+            )
         })
     }
 

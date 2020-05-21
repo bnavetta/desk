@@ -31,8 +31,8 @@ pub enum LogindError {
         message: String,
         #[source]
         source: nix::Error,
-        backtrace: Backtrace
-    }
+        backtrace: Backtrace,
+    },
 }
 
 impl LogindError {
@@ -54,7 +54,7 @@ impl LogindError {
         LogindError::InhibitorFileError {
             message,
             source: error,
-            backtrace: Backtrace::capture()
+            backtrace: Backtrace::capture(),
         }
     }
 }
