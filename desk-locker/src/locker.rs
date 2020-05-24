@@ -3,7 +3,7 @@
 use std::process::{Child, Command};
 
 use anyhow::{bail, Context, Result as AnyResult};
-use log::debug;
+use log::{info, debug};
 
 use desk_logind::inhibitor::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock};
 use desk_logind::{Logind, SessionId};
@@ -147,6 +147,7 @@ impl Locker {
     /// Called when the system is about to sleep. This starts the screen locker if it's not
     /// already running and releases the inhibitor lock.
     pub fn on_sleep(&mut self) -> AnyResult<()> {
+        info!("Preparing for system sleep");
         self.start_locker()
             .context("Could not start locker before sleeping")?;
         self.release_lock()
@@ -156,22 +157,24 @@ impl Locker {
 
     /// Called when the system has resumed from sleep. This acquires a new inhibitor lock.
     pub fn on_resume(&mut self, logind: &Logind) -> AnyResult<()> {
+        info!("Resumed from system sleep");
         self.inhibitor_lock = Some(Locker::take_lock(logind)?);
         Ok(())
     }
 
-    /// Called when the session emits a `Lock` signal (for example, from a `loginctl lock-session`
-    /// call). This starts the screen locker if it's not already running. If using `set_idle`,
-    /// it also sets the session idle hint.
-    pub fn on_lock(&mut self, logind: &Logind) -> AnyResult<()> {
+    /// Lock the screen. This will start the screen locker if it's not already running and, if
+    /// configured with `manage_idle_hint`, set the session's idle hint to `true`.
+    pub fn lock(&mut self, logind: &Logind) -> AnyResult<()> {
+        info!("Locking screen...");
         self.start_locker()?;
         self.set_idle(logind)?;
         Ok(())
     }
 
-    /// Called when the session emits an `Unlock` signal. This kills the screen locker and, if
-    /// using `set_idle`, clears the session idle hint.
-    pub fn on_unlock(&mut self, logind: &Logind) -> AnyResult<()> {
+    /// Unlock the screen. This will kill the screen locker if it's running and, if configured with
+    /// `manage_idle_hint`, set the session's idle hint to false.
+    pub fn unlock(&mut self, logind: &Logind) -> AnyResult<()> {
+        info!("Unlocking screen...");
         self.kill_locker()?;
         self.clear_idle(logind)?;
         Ok(())

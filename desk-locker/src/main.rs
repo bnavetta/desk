@@ -3,14 +3,17 @@ use std::time::Duration;
 
 use anyhow::Result as AnyResult;
 use dbus::blocking::Connection;
+use env_logger::Env;
 use log::{error, info};
 use structopt::StructOpt;
 
 use desk_logind::Logind;
 
 use crate::locker::Locker;
+use crate::screensaver::{ScreenSaver, ScreenSaverEvent};
 
 mod locker;
+mod screensaver;
 
 #[derive(StructOpt)]
 struct Args {
@@ -31,12 +34,15 @@ struct Args {
     #[structopt(long, short = "i")]
     set_idle_hint: bool,
 
-    /// Screen locker command to run, such as `xsecurelock` or `i3lock`.
+    /// Screen locker command to run, such as `xsecurelock` or `i3lock`. This command should not
+    /// fork.
     #[structopt(required = true)]
     locker: Vec<String>,
 }
 
 fn run(args: Args) -> AnyResult<()> {
+    let screen_saver = ScreenSaver::new()?;
+
     let mut conn = Connection::new_system()?;
 
     let logind = Logind::new(&conn);
@@ -53,7 +59,7 @@ fn run(args: Args) -> AnyResult<()> {
     {
         let locker = locker.clone();
         session.on_lock(move |logind| {
-            if let Err(e) = locker.lock().unwrap().on_lock(&logind) {
+            if let Err(e) = locker.lock().unwrap().lock(&logind) {
                 error!("Handling lock failed: {}", e);
             }
         })?;
@@ -62,7 +68,7 @@ fn run(args: Args) -> AnyResult<()> {
     {
         let locker = locker.clone();
         session.on_unlock(move |logind| {
-            if let Err(e) = locker.lock().unwrap().on_unlock(&logind) {
+            if let Err(e) = locker.lock().unwrap().unlock(&logind) {
                 error!("Handling unlock failed: {}", e);
             }
         })?;
@@ -84,19 +90,34 @@ fn run(args: Args) -> AnyResult<()> {
         },
     )?;
 
-    info!("Waiting for lock events...");
+    info!("Waiting for events...");
     loop {
-        if let Err(e) = conn.process(Duration::from_secs(5)) {
+        if let Err(e) = conn.process(Duration::from_millis(100)) {
             error!("Processing D-Bus events failed: {}", e);
         }
 
+        // Must not hold lock while calling conn.process - since the logind signal callbacks also
+        // use the locker, this can deadlock
         let mut locker = locker.lock().unwrap();
         locker.poll_locker(&Logind::new(&conn))?;
+
+        if let Some(event) = screen_saver.poll_event() {
+            let logind = Logind::new(&conn);
+            match event {
+                ScreenSaverEvent::On | ScreenSaverEvent::Cycle => locker.lock(&logind)?,
+                // Do not unlock when the screen saver deactivates - that defeats the point of having this :P
+                _ => ()
+            }
+        }
     }
 }
 
 pub fn main() {
-    env_logger::init();
+    let env = Env::new()
+        .filter_or("DESK_LOG", "info")
+        .write_style("DESK_LOG_STYLE");
+    env_logger::init_from_env(env);
+
     let args = Args::from_args();
     if let Err(e) = run(args) {
         error!("{}", e);
