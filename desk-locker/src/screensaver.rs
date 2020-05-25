@@ -2,8 +2,8 @@ use anyhow::{anyhow, bail, Context, Result as AnyResult};
 use xcb;
 use xcb::screensaver;
 
-/// Client for the X11 screen saver extension. For now, only supports listening for screen saver
-/// events.
+/// Client for the [X11 screen saver extension](https://www.x.org/releases/X11R7.7/doc/scrnsaverproto/saver.html).
+/// For now, only supports listening for screen saver events.
 pub struct ScreenSaver {
     conn: xcb::Connection,
     notify_event: u8
@@ -22,6 +22,8 @@ impl ScreenSaver {
 
         // Figure out the actual X11 event response type we'll see
         let notify_event = ext_data.first_event() + screensaver::NOTIFY;
+
+        // TODO: check extension protocol version
 
         // TODO: multi-monitor support (can watch for screens being added/removed)
         let setup = conn.get_setup();
