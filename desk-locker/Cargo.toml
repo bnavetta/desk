@@ -16,4 +16,4 @@ log = "0.4"
 dbus = "0.8"
 xcb = { version = "0.9", features = ["screensaver"] }
 structopt = "0.3"
-desk-logind = { path = "../desk-logind" }
+desk-logind = { path = "../desk-logind", version = "1.0" }
