@@ -1,6 +1,10 @@
 [package]
 name = "desk-locker"
 version = "1.0.0"
+description = "Screen-locking helper for X11 and systemd"
+categories = ["command-line-utilities"]
+homepage = "https://github.com/bnavetta/desk"
+repository = "https://github.com/bnavetta/desk.git"
 edition = "2018"
 authors = ["Ben Navetta <ben.navetta@gmail.com>"]
 license = "MIT OR Apache-2.0"
