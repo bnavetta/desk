@@ -71,11 +71,11 @@ dependencies = [
 
 [[package]]
 name = "desk-locker"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow 1.0.31 (registry+https://github.com/rust-lang/crates.io-index)",
  "dbus 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "desk-logind 0.1.0",
+ "desk-logind 1.0.0",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "desk-logind"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dbus 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
