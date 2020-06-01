@@ -59,6 +59,14 @@ impl<'a> Logind<'a> {
         self.session(&id)
     }
 
+    /// Attempt to suspend the system. If `interactive`, PolicyKit may prompt the current user
+    /// for authentication if needed.
+    pub fn suspend(&self, interactive: bool) -> Result<(), LogindError> {
+        let manager = self.manager();
+        manager.suspend(interactive)?;
+        Ok(())
+    }
+
     pub fn inhibit(
         &self,
         who: &str,

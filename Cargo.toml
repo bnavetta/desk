@@ -2,5 +2,6 @@
 members = [
   "desk-logind",
   "desk-locker",
+  "desk-exit-screen",
 ]
 

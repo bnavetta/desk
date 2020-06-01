@@ -1,0 +1,13 @@
+#exit-window {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+button {
+    color: transparent;
+    background-color: transparent;
+    border: 0;
+}
+
+button:active {
+    background-color: rgba(127, 127, 127, 0.5);
+}

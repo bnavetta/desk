@@ -40,6 +40,12 @@ impl<'a> Session<'a> {
         Ok(SessionId::new(id))
     }
 
+    /// Lock this session by sending a `Lock` signal
+    pub fn lock(&self) -> Result<(), LogindError> {
+        self.proxy.lock()?;
+        Ok(())
+    }
+
     /// Register a callback to run when the session is locked.
     pub fn on_lock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
         match self.proxy.match_signal(

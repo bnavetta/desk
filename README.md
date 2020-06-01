@@ -1,7 +1,7 @@
 # Desktop Environment Support Kit
 
-Desk is a set of utilities for doing desktop environment-like things with lightweight window managers. So far it only
-has one.
+Desk is a set of utilities for doing desktop environment-like things with lightweight window managers. So far it has two, a screen locker helper and
+an exit screen.
 
 ## `desk-locker`
 
@@ -25,6 +25,10 @@ $ desk-locker --pass-inhibitor-lock xsecurelock
 # idle hint, setting it whenever the screen locker is active is a reasonable default.
 $ desk-locker --set-idle-hint --pass-inhibitor-lock xsecurelock
 ```
+
+## `desk-exit-screen`
+
+`desk-exit-screen` shows a GUI for exiting your window manager (shutting down, rebooting, logging out, etc.).
 
 ## `desk-logind`
 
