@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+atk = "0.8"
 gio = "0.8"
 gdk = "0.12"
 gtk = "0.8"

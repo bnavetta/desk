@@ -121,6 +121,7 @@ name = "desk-exit-screen"
 version = "0.1.0"
 dependencies = [
  "anyhow 1.0.31 (registry+https://github.com/rust-lang/crates.io-index)",
+ "atk 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dbus 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "desk-logind 1.1.0",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",

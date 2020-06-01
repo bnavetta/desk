@@ -2,6 +2,7 @@
 
 use std::env;
 
+use atk::prelude::*;
 use env_logger::Env;
 use gdk::enums::key;
 use gdk::Screen;
@@ -23,9 +24,10 @@ const BUTTON_SIZE: i32 = 400;
 
 fn build_ui(app: &Application) -> anyhow::Result<()> {
     let window = ApplicationWindow::new(app);
-    window.set_widget_name("exit-window");
+    window.set_widget_name("exit-window"); // used in CSS
 
     window.connect_key_press_event(|window, event| {
+        // Destroy the window (and quit) whenever Escape or a known action key is pressed
         if event.get_keyval() == key::Escape {
             window.destroy();
         } else {
@@ -43,7 +45,7 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     });
 
     let container = gtk::Box::new(Orientation::Horizontal, 0);
-    container.set_homogeneous(true);
+    container.set_homogeneous(true); // This makes all children the same size
 
     let icon_theme = IconTheme::get_default().ok_or(anyhow!("No default icon theme"))?;
 
@@ -57,7 +59,10 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
             }
             window.destroy();
         });
-        // button.set_opacity(0.5);
+        if let Some(a11y) = button.get_accessible() {
+            a11y.set_description(act.description());
+        }
+        // TODO: may want to show descriptions on-screen as well
         container.pack_start(&button, false, false, 0);
     }
 
@@ -88,6 +93,7 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
 
 /// Creates a new button with the given icon, scaled to `BUTTON_SIZE`.
 fn create_button(icon_theme: &IconTheme, icon_name: &str) -> anyhow::Result<Button> {
+    // Have to load the icon image directly to make it the right size
     let icon = icon_theme
         .load_icon(icon_name, BUTTON_SIZE, IconLookupFlags::empty())
         .with_context(|| format!("Could not load icon {}", icon_name))?
@@ -107,6 +113,7 @@ fn configure_screen(window: &ApplicationWindow, screen: &Screen) -> anyhow::Resu
     // Updates the window's GDK visual, which is required for transparency to work correctly.
     window.set_visual(screen.get_rgba_visual().as_ref());
 
+    // Since GTK objects aren't thread-safe, there's no way to have a shared CSS provider
     let provider = CssProvider::new();
     provider
         .load_from_data(STYLE.as_bytes())

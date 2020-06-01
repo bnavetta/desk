@@ -67,6 +67,30 @@ impl<'a> Logind<'a> {
         Ok(())
     }
 
+    /// Attempt to reboot the system. If `interactive`, PolicyKit may prompt the current user for
+    /// authentication.
+    pub fn reboot(&self, interactive: bool) -> Result<(), LogindError> {
+        let manager = self.manager();
+        manager.reboot(interactive)?;
+        Ok(())
+    }
+
+    /// Attempt to power off the system. If `interactive`, PolicyKit may prompt the current user for
+    /// authentication.
+    pub fn power_off(&self, interactive: bool) -> Result<(), LogindError> {
+        let manager = self.manager();
+        manager.power_off(interactive)?;
+        Ok(())
+    }
+
+    /// Attempt to hibernate the system. If `interactive`, PolicyKit may prompt the current user for
+    /// authentication.
+    pub fn hibernate(&self, interactive: bool) -> Result<(), LogindError> {
+        let manager = self.manager();
+        manager.hibernate(interactive)?;
+        Ok(())
+    }
+
     pub fn inhibit(
         &self,
         who: &str,
