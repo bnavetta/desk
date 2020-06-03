@@ -5,12 +5,12 @@ use std::env;
 use atk::prelude::*;
 use env_logger::Env;
 use gdk::enums::key;
-use gdk::Screen;
+use gdk::{Screen, WindowTypeHint};
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{
     Application, ApplicationWindow, Button, CssProvider, IconLookupFlags, IconTheme, Image,
-    Orientation, StyleContext,
+    Orientation, StyleContext, WindowPosition,
 };
 use log::error;
 
@@ -86,8 +86,13 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     });
 
     window.set_decorated(false);
+    window.set_skip_taskbar_hint(true);
+    window.set_skip_pager_hint(true);
+    window.set_type_hint(WindowTypeHint::Desktop);
+    window.set_position(WindowPosition::CenterAlways);
+    window.set_keep_above(true);
     window.show_all();
-    window.fullscreen();
+    window.stick();
     Ok(())
 }
 
@@ -112,6 +117,18 @@ fn create_button(icon_theme: &IconTheme, icon_name: &str) -> anyhow::Result<Butt
 fn configure_screen(window: &ApplicationWindow, screen: &Screen) -> anyhow::Result<()> {
     // Updates the window's GDK visual, which is required for transparency to work correctly.
     window.set_visual(screen.get_rgba_visual().as_ref());
+
+    let monitor = screen
+        .get_display()
+        .get_primary_monitor()
+        .ok_or(anyhow!("Primary monitor does not exist"))?;
+    let workarea = monitor.get_workarea();
+    window.resize(workarea.width, workarea.height);
+
+    let (x, y) = window.get_position();
+    println!("Window position: {}, {}", x, y);
+    let (width, height) = window.get_size();
+    println!("Window size: {} x {}", width, height);
 
     // Since GTK objects aren't thread-safe, there's no way to have a shared CSS provider
     let provider = CssProvider::new();
