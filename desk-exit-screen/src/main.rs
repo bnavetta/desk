@@ -9,8 +9,8 @@ use gdk::{Screen, WindowTypeHint};
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Button, CssProvider, IconLookupFlags, IconTheme, Image,
-    Orientation, StyleContext, WindowPosition,
+    Application, Button, CssProvider, IconLookupFlags, IconTheme, Image, Orientation, StyleContext,
+    Window, WindowType,
 };
 use log::error;
 
@@ -23,7 +23,8 @@ const STYLE: &str = include_str!("desk-exit-screen.css");
 const BUTTON_SIZE: i32 = 400;
 
 fn build_ui(app: &Application) -> anyhow::Result<()> {
-    let window = ApplicationWindow::new(app);
+    let window = Window::new(WindowType::Toplevel);
+    app.add_window(&window);
     window.set_widget_name("exit-window"); // used in CSS
 
     window.connect_key_press_event(|window, event| {
@@ -89,10 +90,10 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     window.set_skip_taskbar_hint(true);
     window.set_skip_pager_hint(true);
     window.set_type_hint(WindowTypeHint::Desktop);
-    window.set_position(WindowPosition::CenterAlways);
     window.set_keep_above(true);
     window.show_all();
     window.stick();
+    // window.fullscreen();
     Ok(())
 }
 
@@ -114,7 +115,7 @@ fn create_button(icon_theme: &IconTheme, icon_name: &str) -> anyhow::Result<Butt
 }
 
 /// Configure a screen for displaying the exit window
-fn configure_screen(window: &ApplicationWindow, screen: &Screen) -> anyhow::Result<()> {
+fn configure_screen(window: &Window, screen: &Screen) -> anyhow::Result<()> {
     // Updates the window's GDK visual, which is required for transparency to work correctly.
     window.set_visual(screen.get_rgba_visual().as_ref());
 
@@ -124,11 +125,9 @@ fn configure_screen(window: &ApplicationWindow, screen: &Screen) -> anyhow::Resu
         .ok_or(anyhow!("Primary monitor does not exist"))?;
     let workarea = monitor.get_workarea();
     window.resize(workarea.width, workarea.height);
-
-    let (x, y) = window.get_position();
-    println!("Window position: {}, {}", x, y);
-    let (width, height) = window.get_size();
-    println!("Window size: {} x {}", width, height);
+    // TODO: I'm not sure if it's polybar or i3, but the window is shifted down a couple pixels from
+    //       covering the whole screen. This move is a workaround to fix it for now :/
+    window.move_(0, -2);
 
     // Since GTK objects aren't thread-safe, there's no way to have a shared CSS provider
     let provider = CssProvider::new();
