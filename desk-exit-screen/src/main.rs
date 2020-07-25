@@ -4,7 +4,8 @@ use std::env;
 
 use atk::prelude::*;
 use env_logger::Env;
-use gdk::enums::key;
+use glib::clone;
+use gdk::keys::constants as keys;
 use gdk::{Screen, WindowTypeHint};
 use gio::prelude::*;
 use gtk::prelude::*;
@@ -27,23 +28,23 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     app.add_window(&window);
     window.set_widget_name("exit-window"); // used in CSS
 
-    window.connect_key_press_event(|window, event| {
-        // Destroy the window (and quit) whenever Escape or a known action key is pressed
-        if event.get_keyval() == key::Escape {
-            window.destroy();
+    window.connect_key_press_event(clone!(@weak app => @default-return Inhibit(false), move |_window, event| {
+        // Quit whenever Escape or a known action key is pressed
+        if event.get_keyval() == keys::Escape {
+            app.quit();
         } else {
             for action in actions::ACTIONS {
                 if event.get_keyval() == action.key() {
                     if let Err(e) = action.run() {
                         error!("Action failed: {}", e);
                     }
-                    window.destroy();
+                    app.quit();
                 }
             }
         }
 
         Inhibit(false)
-    });
+    }));
 
     let container = gtk::Box::new(Orientation::Horizontal, 0);
     container.set_homogeneous(true); // This makes all children the same size
@@ -53,13 +54,12 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     for act in actions::ACTIONS {
         let button = create_button(&icon_theme, act.icon())?;
         let run_fn = act.run_fn();
-        let window = window.clone(); // Will just increase the reference count
-        button.connect_clicked(move |_| {
+        button.connect_clicked(clone!(@weak app => move |_| {
             if let Err(e) = run_fn() {
                 error!("Action failed: {}", e);
             }
-            window.destroy();
-        });
+            app.quit();
+        }));
         if let Some(a11y) = button.get_accessible() {
             a11y.set_description(act.description());
         }
@@ -109,7 +109,7 @@ fn create_button(icon_theme: &IconTheme, icon_name: &str) -> anyhow::Result<Butt
 
     let button = Button::new();
     button.set_size_request(BUTTON_SIZE, BUTTON_SIZE);
-    let image = Image::new_from_pixbuf(Some(&icon));
+    let image = Image::from_pixbuf(Some(&icon));
     button.set_image(Some(&image));
     Ok(button)
 }

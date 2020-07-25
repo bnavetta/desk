@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::{anyhow, Context};
 use dbus::blocking::Connection;
 use desk_logind::Logind;
-use gdk::enums::key::{self, Key};
+use gdk::keys::{Key, constants as keys};
 
 /// Since quitting is window-manager-specific, we run a user-provided command from this environment
 /// variable instead of trying to do it ourselves.
@@ -24,7 +24,7 @@ pub struct Action {
 impl Action {
     /// Key to trigger this action on press
     pub fn key(&self) -> Key {
-        self.key
+        self.key.clone()
     }
 
     /// Icon displayed for this action as a button in the exit screen
@@ -52,38 +52,38 @@ pub const ACTIONS: &'static [Action] = &[
     // Order in this array corresponds to order on the screen. Actions are roughly ordered from
     // most-disruptive to least-disruptive
     Action {
-        key: key::l,
+        key: keys::l,
         icon: "system-lock-screen",
         description: "Lock your screen",
         run: lock,
     },
     Action {
-        key: key::q,
+        key: keys::q,
         icon: "system-log-out",
         description: "Log out",
         run: quit,
     },
     Action {
-        key: key::s,
+        key: keys::s,
         icon: "system-suspend",
         description: "Put the computer to sleep",
         run: suspend,
     },
     Action {
-        key: key::h,
+        key: keys::h,
         icon: "system-hibernate",
         description: "Hibernate the computer",
         run: hibernate,
     },
     // TODO: suspend-then-hibernate as well?
     Action {
-        key: key::r,
+        key: keys::r,
         icon: "system-restart",
         description: "Restart the computer",
         run: restart,
     },
     Action {
-        key: key::p,
+        key: keys::p,
         icon: "system-shutdown",
         description: "Shut the computer off",
         run: shut_down,

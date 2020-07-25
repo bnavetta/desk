@@ -14,10 +14,13 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 anyhow = "1"
 atk = "0.9"
+confy = "0.4"
 gio = "0.9"
+glib = "0.10"
 gdk = { version = "0.13", features = ["v3_22"] }
 gtk = "0.9"
 dbus = "0.8"
 log = "0.4"
 env_logger = "0.7"
+serde = { version  = "1", features = ["derive"] }
 desk-logind = { path = "../desk-logind", version = "1.1" }

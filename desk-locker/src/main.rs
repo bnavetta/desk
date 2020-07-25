@@ -43,7 +43,7 @@ struct Args {
 fn run(args: Args) -> AnyResult<()> {
     let screen_saver = ScreenSaver::new()?;
 
-    let mut conn = Connection::new_system()?;
+    let conn = Connection::new_system()?;
 
     let logind = Logind::new(&conn);
     let locker = Arc::new(Mutex::new(Locker::new(
