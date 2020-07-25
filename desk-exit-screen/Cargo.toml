@@ -13,10 +13,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1"
-atk = "0.8"
-gio = "0.8"
-gdk = { version = "0.12", features = ["v3_22"] }
-gtk = "0.8"
+atk = "0.9"
+gio = "0.9"
+gdk = { version = "0.13", features = ["v3_22"] }
+gtk = "0.9"
 dbus = "0.8"
 log = "0.4"
 env_logger = "0.7"
