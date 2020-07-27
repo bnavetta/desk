@@ -22,14 +22,17 @@ use log::{error, debug};
 mod actions;
 mod config;
 
-use crate::actions::Actions;
+use crate::actions::build_actions;
 use crate::config::Config;
 
 const STYLE: &str = include_str!("desk-exit-screen.css");
 
 const BUTTON_SIZE: i32 = 400;
 
-fn build_ui(app: &Application, actions: Arc<Actions>) -> anyhow::Result<()> {
+fn build_ui(app: &Application) -> anyhow::Result<()> {
+    let config = load_config()?;
+    let actions = Arc::new(build_actions(config));
+
     let window = Window::new(WindowType::Toplevel);
     app.add_window(&window);
     window.set_widget_name("exit-window"); // used in CSS
@@ -178,11 +181,8 @@ fn run() -> anyhow::Result<()> {
     let app = Application::new(Some("com.bennavetta.desk.exit-screen"), Default::default())
         .context("Could not create GTK application")?;
 
-    let config = load_config()?;
-    let actions = Arc::new(actions::build_actions(config));
-
     app.connect_activate(move |app| {
-        if let Err(e) = build_ui(app, actions.clone()) {
+        if let Err(e) = build_ui(app) {
             error!("Could not create UI: {}", e);
         }
     });
