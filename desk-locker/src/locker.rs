@@ -3,7 +3,7 @@
 use std::process::{Child, Command};
 
 use anyhow::{bail, Context, Result as AnyResult};
-use log::{info, debug};
+use log::{debug, info};
 
 use desk_logind::inhibitor::{InhibitEvent, InhibitEventSet, InhibitMode, InhibitorLock};
 use desk_logind::{Logind, SessionId};

@@ -6,12 +6,13 @@ use xcb::screensaver;
 /// For now, only supports listening for screen saver events.
 pub struct ScreenSaver {
     conn: xcb::Connection,
-    notify_event: u8
+    notify_event: u8,
 }
 
 impl ScreenSaver {
     pub fn new() -> AnyResult<ScreenSaver> {
-        let (conn, screen_num) = xcb::Connection::connect(None).context("Could not connect to X server")?;
+        let (conn, screen_num) =
+            xcb::Connection::connect(None).context("Could not connect to X server")?;
 
         let ext_data = conn
             .get_extension_data(screensaver::id())
@@ -27,15 +28,23 @@ impl ScreenSaver {
 
         // TODO: multi-monitor support (can watch for screens being added/removed)
         let setup = conn.get_setup();
-        let screen = setup.roots().nth(screen_num as usize).ok_or(anyhow!("Could not get X11 screen {}", screen_num))?;
+        let screen = setup
+            .roots()
+            .nth(screen_num as usize)
+            .ok_or(anyhow!("Could not get X11 screen {}", screen_num))?;
 
-        screensaver::select_input_checked(&conn, screen.root(), screensaver::EVENT_NOTIFY_MASK | screensaver::EVENT_CYCLE_MASK)
-            .request_check().context(anyhow!("Could not subscribe to X11 screen saver events on screen {}", screen_num))?;
+        screensaver::select_input_checked(
+            &conn,
+            screen.root(),
+            screensaver::EVENT_NOTIFY_MASK | screensaver::EVENT_CYCLE_MASK,
+        )
+        .request_check()
+        .context(anyhow!(
+            "Could not subscribe to X11 screen saver events on screen {}",
+            screen_num
+        ))?;
 
-        Ok(ScreenSaver {
-            conn,
-            notify_event
-        })
+        Ok(ScreenSaver { conn, notify_event })
     }
 
     pub fn poll_event(&self) -> Option<ScreenSaverEvent> {
@@ -44,9 +53,7 @@ impl ScreenSaver {
             let event_type = event.response_type() & !0x80;
             if event_type == self.notify_event {
                 // Safety: verified above that this is a NotifyEvent, according to the event type from the extension data
-                let event: &xcb::screensaver::NotifyEvent = unsafe {
-                    xcb::cast_event(&event)
-                };
+                let event: &xcb::screensaver::NotifyEvent = unsafe { xcb::cast_event(&event) };
 
                 match event.state() as u32 {
                     screensaver::STATE_OFF => Some(ScreenSaverEvent::Off),
@@ -55,7 +62,6 @@ impl ScreenSaver {
                     screensaver::STATE_DISABLED => Some(ScreenSaverEvent::Disabled),
                     _ => None,
                 }
-
             } else {
                 None
             }
@@ -76,5 +82,5 @@ pub enum ScreenSaverEvent {
     Cycle,
 
     /// The screen saver was disabled
-    Disabled
+    Disabled,
 }

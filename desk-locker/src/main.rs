@@ -106,7 +106,7 @@ fn run(args: Args) -> AnyResult<()> {
             match event {
                 ScreenSaverEvent::On | ScreenSaverEvent::Cycle => locker.lock(&logind)?,
                 // Do not unlock when the screen saver deactivates - that defeats the point of having this :P
-                _ => ()
+                _ => (),
             }
         }
     }
