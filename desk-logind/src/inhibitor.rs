@@ -66,7 +66,7 @@ impl InhibitEventSet {
         if self.0.is_empty() {
             ""
         } else {
-            &self.0[0..self.0.len()]
+            &self.0[0..self.0.len() - 1] // Drop the trailing `:`
         }
     }
 }
