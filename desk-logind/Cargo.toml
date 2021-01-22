@@ -1,6 +1,6 @@
 [package]
 name = "desk-logind"
-version = "1.1.0"
+version = "1.1.1"
 description = "Bindings for the systemd-logind D-Bus API"
 categories = ["os::unix-apis"]
 homepage = "https://github.com/bnavetta/desk"

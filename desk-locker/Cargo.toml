@@ -1,6 +1,6 @@
 [package]
 name = "desk-locker"
-version = "1.0.0"
+version = "1.0.1"
 description = "Screen-locking helper for X11 and systemd"
 categories = ["command-line-utilities"]
 homepage = "https://github.com/bnavetta/desk"

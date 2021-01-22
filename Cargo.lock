@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "desk-exit-screen"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "atk",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "desk-locker"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "dbus",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "desk-logind"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "dbus",
  "nix",
