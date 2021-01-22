@@ -42,13 +42,11 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
             // Quit whenever Escape or a known action key is pressed
             if event.get_keyval() == keys::Escape {
                 app.quit();
-            } else {
-                if let Some(action) = actions.find_by_key(event.get_keyval()) {
-                    if let Err(e) = action.run() {
-                        error!("Action failed: {}", e);
-                    }
-                    app.quit();
+            } else if let Some(action) = actions.find_by_key(event.get_keyval()) {
+                if let Err(e) = action.run() {
+                    error!("Action failed: {}", e);
                 }
+                app.quit();
             }
 
             Inhibit(false)
@@ -58,7 +56,7 @@ fn build_ui(app: &Application) -> anyhow::Result<()> {
     let container = gtk::Box::new(Orientation::Horizontal, 0);
     container.set_homogeneous(true); // This makes all children the same size
 
-    let icon_theme = IconTheme::get_default().ok_or(anyhow!("No default icon theme"))?;
+    let icon_theme = IconTheme::get_default().ok_or_else(|| anyhow!("No default icon theme"))?;
 
     for (name, action) in actions.iter() {
         let button = create_button(&icon_theme, action.icon())?;
@@ -131,7 +129,7 @@ fn configure_screen(window: &Window, screen: &Screen) -> anyhow::Result<()> {
     let monitor = screen
         .get_display()
         .get_primary_monitor()
-        .ok_or(anyhow!("Primary monitor does not exist"))?;
+        .ok_or_else(|| anyhow!("Primary monitor does not exist"))?;
     let workarea = monitor.get_workarea();
     window.resize(workarea.width, workarea.height);
     // TODO: I'm not sure if it's polybar or i3, but the window is shifted down a couple pixels from

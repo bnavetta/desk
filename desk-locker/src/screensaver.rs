@@ -1,5 +1,4 @@
 use anyhow::{anyhow, bail, Context, Result as AnyResult};
-use xcb;
 use xcb::screensaver;
 
 /// Client for the [X11 screen saver extension](https://www.x.org/releases/X11R7.7/doc/scrnsaverproto/saver.html).

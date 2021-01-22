@@ -44,7 +44,7 @@ pub struct Actions {
 
 impl Actions {
     /// Iterate over all actions in the configured display order
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a String, &'a Action)> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = (&'_ String, &'_ Action)> {
         self.order
             .iter()
             .flat_map(move |act| Some(act).zip(self.actions.get(act)))
