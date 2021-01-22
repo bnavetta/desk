@@ -11,6 +11,6 @@ authors = ["Ben Navetta <ben.navetta@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dbus = "0.8"
-nix = "0.17"
+dbus = "0.9"
+nix = "0.19"
 thiserror = "1.0"

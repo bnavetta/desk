@@ -47,7 +47,7 @@ impl<'a> Session<'a> {
     }
 
     /// Register a callback to run when the session is locked.
-    pub fn on_lock<F: Fn(Logind) -> () + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
+    pub fn on_lock<F: Fn(Logind) + Send + 'static>(&self, cb: F) -> Result<(), LogindError> {
         match self.proxy.match_signal(
             move |_: OrgFreedesktopLogin1SessionLock, conn: &Connection, _: &Message| {
                 cb(Logind::new(conn));
@@ -60,7 +60,7 @@ impl<'a> Session<'a> {
     }
 
     /// Register a callback to run when the session is unlocked.
-    pub fn on_unlock<F: Fn(Logind) -> () + Send + 'static>(
+    pub fn on_unlock<F: Fn(Logind) + Send + 'static>(
         &self,
         cb: F,
     ) -> Result<(), LogindError> {

@@ -31,7 +31,7 @@ impl ScreenSaver {
         let screen = setup
             .roots()
             .nth(screen_num as usize)
-            .ok_or(anyhow!("Could not get X11 screen {}", screen_num))?;
+            .ok_or_else(|| anyhow!("Could not get X11 screen {}", screen_num))?;
 
         screensaver::select_input_checked(
             &conn,

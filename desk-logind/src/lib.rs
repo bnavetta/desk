@@ -48,7 +48,7 @@ impl<'a> Logind<'a> {
             "org.freedesktop.login1",
             path,
             self.timeout,
-            self.conn.clone(),
+            self.conn,
         );
         Ok(Session::new(proxy))
     }
@@ -103,7 +103,7 @@ impl<'a> Logind<'a> {
         Ok(InhibitorLock::new(fd))
     }
 
-    pub fn on_sleep<F: Fn(Logind) -> () + Send + 'static, G: Fn(Logind) -> () + Send + 'static>(
+    pub fn on_sleep<F: Fn(Logind) + Send + 'static, G: Fn(Logind) + Send + 'static>(
         &self,
         pre_sleep: F,
         post_sleep: G,

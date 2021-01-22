@@ -93,7 +93,7 @@ impl Locker {
         if let Some(ref mut locker) = self.locker_process {
             // If try_wait returns None, then the locker is still running. However, we have no
             // guarantee that it won't crash immediately after.
-            if let None = locker.try_wait()? {
+            if locker.try_wait()?.is_none() {
                 debug!("Screen locker is already running, will not restart");
                 return Ok(());
             }

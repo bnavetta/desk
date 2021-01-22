@@ -60,7 +60,7 @@ fn run(args: Args) -> AnyResult<()> {
         let locker = locker.clone();
         session.on_lock(move |logind| {
             if let Err(e) = locker.lock().unwrap().lock(&logind) {
-                error!("Handling lock failed: {}", e);
+                error!("Handling lock failed: {:?}", e);
             }
         })?;
     }
@@ -69,7 +69,7 @@ fn run(args: Args) -> AnyResult<()> {
         let locker = locker.clone();
         session.on_unlock(move |logind| {
             if let Err(e) = locker.lock().unwrap().unlock(&logind) {
-                error!("Handling unlock failed: {}", e);
+                error!("Handling unlock failed: {:?}", e);
             }
         })?;
     }
@@ -80,12 +80,12 @@ fn run(args: Args) -> AnyResult<()> {
     logind.on_sleep(
         move |_logind| {
             if let Err(e) = sleep_locker.lock().unwrap().on_sleep() {
-                error!("Handling sleep failed: {}", e);
+                error!("Handling sleep failed: {:?}", e);
             }
         },
         move |logind| {
             if let Err(e) = resume_locker.lock().unwrap().on_resume(&logind) {
-                error!("Handling resume failed: {}", e);
+                error!("Handling resume failed: {:?}", e);
             }
         },
     )?;
@@ -93,7 +93,7 @@ fn run(args: Args) -> AnyResult<()> {
     info!("Waiting for events...");
     loop {
         if let Err(e) = conn.process(Duration::from_millis(100)) {
-            error!("Processing D-Bus events failed: {}", e);
+            error!("Processing D-Bus events failed: {:?}", e);
         }
 
         // Must not hold lock while calling conn.process - since the logind signal callbacks also
@@ -120,6 +120,6 @@ pub fn main() {
 
     let args = Args::from_args();
     if let Err(e) = run(args) {
-        error!("{}", e);
+        error!("{:?}", e);
     }
 }
